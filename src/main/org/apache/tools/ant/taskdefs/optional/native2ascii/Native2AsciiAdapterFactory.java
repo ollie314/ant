@@ -40,10 +40,10 @@ public class Native2AsciiAdapterFactory {
      * vendor
      */
     public static String getDefault() {
-        if (JavaEnvUtils.isKaffe() || JavaEnvUtils.isClasspathBased()) {
+        if (shouldUseKaffee()) {
             return KaffeNative2Ascii.IMPLEMENTATION_NAME;
         }
-        return SunNative2Ascii.IMPLEMENTATION_NAME;
+        return BuiltinNative2Ascii.IMPLEMENTATION_NAME;
     }
 
     /**
@@ -79,11 +79,13 @@ public class Native2AsciiAdapterFactory {
                                                  ProjectComponent log,
                                                  Path classpath)
         throws BuildException {
-        if (((JavaEnvUtils.isKaffe() || JavaEnvUtils.isClasspathBased()) && choice == null)
+        if ((shouldUseKaffee() && choice == null)
             || KaffeNative2Ascii.IMPLEMENTATION_NAME.equals(choice)) {
             return new KaffeNative2Ascii();
         } else if (SunNative2Ascii.IMPLEMENTATION_NAME.equals(choice)) {
             return new SunNative2Ascii();
+        } else if (BuiltinNative2Ascii.IMPLEMENTATION_NAME.equals(choice)) {
+            return new BuiltinNative2Ascii();
         } else if (choice != null) {
             return resolveClassName(choice,
                                     // Memory leak in line below
@@ -91,9 +93,7 @@ public class Native2AsciiAdapterFactory {
                                     .createClassLoader(classpath));
         }
 
-        // This default has been good enough until Ant 1.6.3, so stick
-        // with it
-        return new SunNative2Ascii();
+        return new BuiltinNative2Ascii();
     }
 
     /**
@@ -112,5 +112,9 @@ public class Native2AsciiAdapterFactory {
             loader != null ? loader :
             Native2AsciiAdapterFactory.class.getClassLoader(),
             Native2AsciiAdapter.class);
+    }
+
+    private static final boolean shouldUseKaffee() {
+        return JavaEnvUtils.isKaffe() || JavaEnvUtils.isClasspathBased();
     }
 }

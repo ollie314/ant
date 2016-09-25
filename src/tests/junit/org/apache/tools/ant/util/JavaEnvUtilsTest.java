@@ -28,6 +28,7 @@ import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assume.assumeTrue;
 
 /**
  * TestCase for JavaEnvUtils.
@@ -115,12 +116,11 @@ public class JavaEnvUtilsTest {
         assertTrue(j+" is normalized and in the JDK dir",
                    j.startsWith(javaHomeParent));
 
-        if ((Os.isFamily("mac") && JavaEnvUtils.getJavaVersionNumber() <= JavaEnvUtils.VERSION_1_6)
-            || JavaEnvUtils.isAtLeastJavaVersion(JavaEnvUtils.JAVA_1_9)) {
-            assertTrue(j+" is normalized and in the JRE dir",
+        if (JavaEnvUtils.isAtLeastJavaVersion(JavaEnvUtils.JAVA_9)) {
+            assertTrue(j + " is normalized and in the JRE dir",
                        j.startsWith(javaHome));
         } else {
-            assertTrue(j+" is normalized and not in the JRE dir",
+            assertTrue(j + " is normalized and not in the JRE dir",
                        !j.startsWith(javaHome));
         }
 
@@ -136,9 +136,12 @@ public class JavaEnvUtilsTest {
         assertTrue(
                 "Current java version is not at least the current java version...",
                 JavaEnvUtils.isAtLeastJavaVersion(JavaEnvUtils.getJavaVersion()));
-        assertFalse(
-                "In case the current java version is higher than 9.0 definitely a new algorithem will be needed",
-                JavaEnvUtils.isAtLeastJavaVersion("9.0"));
     }
   
+    @Test
+    public void isJavaVersionSupportsBothVersionsOfJava9() {
+        assumeTrue(JavaEnvUtils.isJavaVersion(JavaEnvUtils.JAVA_9));
+        assertTrue("JAVA_1_9 is not considered equal to JAVA_9",
+                JavaEnvUtils.isJavaVersion(JavaEnvUtils.JAVA_1_9));
+    }
 }

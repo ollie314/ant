@@ -1,22 +1,3 @@
-package org.apache.tools.ant.taskdefs.optional;
-
-import static org.junit.Assert.assertTrue;
-
-import java.io.ByteArrayInputStream;
-import java.io.File;
-import java.io.InputStream;
-import java.security.Permission;
-
-import junit.framework.AssertionFailedError;
-
-import org.apache.tools.ant.BuildException;
-import org.apache.tools.ant.taskdefs.XSLTLiaison;
-import org.apache.tools.ant.taskdefs.XSLTLogger;
-import org.apache.tools.ant.util.JAXPUtils;
-import org.junit.After;
-import org.junit.Assume;
-import org.junit.Test;
-
 /*
  *  Licensed to the Apache Software Foundation (ASF) under one or more
  *  contributor license agreements.  See the NOTICE file distributed with
@@ -35,6 +16,27 @@ import org.junit.Test;
  *
  */
 
+package org.apache.tools.ant.taskdefs.optional;
+
+import static org.junit.Assert.assertTrue;
+
+import java.io.ByteArrayInputStream;
+import java.io.File;
+import java.io.InputStream;
+import java.security.Permission;
+import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.TransformerFactoryConfigurationError;
+
+import junit.framework.AssertionFailedError;
+
+import org.apache.tools.ant.BuildException;
+import org.apache.tools.ant.taskdefs.XSLTLiaison;
+import org.apache.tools.ant.taskdefs.XSLTLogger;
+import org.apache.tools.ant.util.JAXPUtils;
+import org.junit.After;
+import org.junit.Assume;
+import org.junit.Test;
+
 /**
  * TraX XSLTLiaison testcase
  */
@@ -42,7 +44,7 @@ public class TraXLiaisonTest extends AbstractXSLTLiaisonTest
     implements XSLTLogger {
 
 
-	@After
+    @After
     public void tearDown() {
         File f = new File("xalan2-redirect-out.tmp");
         if (f.exists()) {
@@ -57,14 +59,16 @@ public class TraXLiaisonTest extends AbstractXSLTLiaisonTest
     }
 
     @Test
-    public void testXalan2Redirect() throws Exception {
-    	try {
-    		getClass().getClassLoader().loadClass("org.apache.xalan.lib.Redirect");
-    	} catch (Exception exc) {
-    		Assume.assumeNoException("xalan redirect is not on the classpath", exc);
-    	}
+    public void testXalan2RedirectViaJDKFactory() throws Exception {
+        try {
+            getClass().getClassLoader().loadClass("org.apache.xalan.lib.Redirect");
+        } catch (Exception exc) {
+            Assume.assumeNoException("xalan redirect is not on the classpath", exc);
+        }
         File xsl = getFile("/taskdefs/optional/xalan-redirect-in.xsl");
         liaison.setStylesheet(xsl);
+        ((TraXLiaison) liaison)
+            .setFeature("http://www.oracle.com/xml/jaxp/properties/enableExtensionFunctions", true);
         File out = new File("xalan2-redirect-out-dummy.tmp");
         File in = getFile("/taskdefs/optional/xsltliaison-in.xsl");
         ClassLoader orig = Thread.currentThread().getContextClassLoader();
@@ -86,6 +90,35 @@ public class TraXLiaisonTest extends AbstractXSLTLiaisonTest
         } finally {
             out.delete();
             Thread.currentThread().setContextClassLoader(orig);
+            System.setSecurityManager(null);
+        }
+    }
+
+    @Test
+    public void testXalan2RedirectViaXalan() throws Exception {
+        try {
+            getClass().getClassLoader().loadClass("org.apache.xalan.lib.Redirect");
+        } catch (Exception exc) {
+            Assume.assumeNoException("xalan redirect is not on the classpath", exc);
+        }
+        try {
+            String factoryName = TransformerFactory.newInstance().getClass().getName();
+            Assume.assumeTrue("TraxFactory is " + factoryName + " and not Xalan",
+                              "org.apache.xalan.processor.TransformerFactoryImpl"
+                              .equals(factoryName));
+        } catch (TransformerFactoryConfigurationError exc) {
+            throw new RuntimeException(exc);
+        }
+        File xsl = getFile("/taskdefs/optional/xalan-redirect-in.xsl");
+        liaison.setStylesheet(xsl);
+        File out = new File("xalan2-redirect-out-dummy.tmp");
+        File in = getFile("/taskdefs/optional/xsltliaison-in.xsl");
+        try {
+            liaison.addParam("xalan-version", "2");
+            System.setSecurityManager(new SecurityManager() {public void checkPermission(Permission perm) {}});
+            liaison.transform(in, out);
+        } finally {
+            out.delete();
             System.setSecurityManager(null);
         }
     }

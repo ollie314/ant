@@ -29,6 +29,9 @@ import org.apache.tools.ant.BuildException;
 import org.apache.tools.ant.Project;
 import org.apache.tools.ant.taskdefs.condition.FilesMatch;
 import org.apache.tools.ant.types.FileSet;
+import org.apache.tools.ant.types.resources.Sort;
+import org.apache.tools.ant.types.resources.comparators.Name;
+import org.apache.tools.ant.types.resources.comparators.Reverse;
 import org.apache.tools.ant.types.selectors.FilenameSelector;
 import org.junit.After;
 import org.junit.Before;
@@ -100,7 +103,7 @@ public class ScpTest {
         assertFalse("Assert that the testFile does not exist.", testFile.exists());
 
         // download
-        scpTask = createTask(); 
+        scpTask = createTask();
         scpTask.setFile( sshHostUri + "/" + uploadFile.getName() );
         scpTask.setTodir( testFile.getPath() );
         scpTask.execute();
@@ -148,26 +151,56 @@ public class ScpTest {
     }
 
     @Test
+    public void testMultiResourceCollectionUpload() throws IOException {
+        assertNotNull("system property scp.tmp must be set", tempDir);
+        List uploadList = new ArrayList();
+        for (int i = 0; i < 5; i++) {
+            uploadList.add(createTemporaryFile());
+        }
+
+        Scp scp = createTask();
+
+        // reverse order resource collection
+        Sort sort = new Sort();
+        sort.setProject(scp.getProject());
+        Reverse reverse = new Reverse();
+        reverse.add(new Name());
+        sort.add(reverse);
+
+        FilenameSelector selector = new FilenameSelector();
+        selector.setName("scp*");
+        FileSet fileset = new FileSet();
+        fileset.setProject(scp.getProject());
+        fileset.setDir(tempDir);
+        fileset.addFilename(selector);
+        sort.add(fileset);
+        scp.add(sort);
+
+        scp.setTodir(sshHostUri);
+        scp.execute();
+    }
+
+    @Test
     public void testRemoteToDir() throws IOException {
         Scp scpTask = createTask();
-        
+
         // first try an invalid URI
         try {
             scpTask.setRemoteTodir( "host:/a/path/without/an/at" );
             fail("Expected a BuildException to be thrown due to invalid"
-                    + " remoteToDir"); 
+                    + " remoteToDir");
         }
         catch (BuildException e)
         {
             // expected
             //TODO we should be asserting a value in here
         }
-        
+
         // And this one should work
         scpTask.setRemoteTodir( "user:password@host:/a/path/with/an/at" );
         // no exception
     }
-    
+
     public void addCleanup( File file ) {
         cleanUpList.add( file );
     }

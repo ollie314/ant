@@ -15,11 +15,34 @@
  *  limitations under the License.
  *
  */
+package org.apache.tools.ant.filters;
+
+import org.apache.tools.ant.util.Native2AsciiUtils;
+
 /**
+ * A filter that performs translations from characters to their
+ * Unicode-escape sequences and vice-versa.
+ *
+ * @since Ant 1.9.8
  */
-@Distributed(
-        protocol="CORBA",
-        distribution=Distributed.DistributionTypes.FEDERATED
-        )
-public class AptExample {
+public class Native2AsciiFilter extends TokenFilter.ChainableReaderFilter {
+    private boolean reverse;
+
+    /**
+     * Flag the conversion to run in the reverse sense,
+     * that is Ascii to Native encoding.
+     *
+     * @param reverse True if the conversion is to be reversed,
+     *                otherwise false;
+     */
+    public void setReverse(boolean reverse) {
+        this.reverse = reverse;
+    }
+
+    @Override
+    public String filter(String line) {
+        return reverse
+            ? Native2AsciiUtils.ascii2native(line)
+            : Native2AsciiUtils.native2ascii(line);
+    }
 }

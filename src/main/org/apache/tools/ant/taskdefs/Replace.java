@@ -31,7 +31,10 @@ import java.io.OutputStreamWriter;
 import java.io.Reader;
 import java.io.Writer;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Properties;
 
 import org.apache.tools.ant.BuildException;
@@ -351,7 +354,7 @@ public class Replace extends MatchingTask {
      * a StringBuffer. Compatible with the Replacefilter.
      * @since 1.7
      */
-    private class FileInput /* JDK 5: implements Closeable */ {
+    private class FileInput implements AutoCloseable {
         private StringBuffer outputBuffer;
         private final InputStream is;
         private Reader reader;
@@ -415,7 +418,7 @@ public class Replace extends MatchingTask {
      * Replacefilter.
      * @since 1.7
      */
-    private class FileOutput /* JDK 5: implements Closeable */ {
+    private class FileOutput implements AutoCloseable {
         private StringBuffer inputBuffer;
         private final OutputStream os;
         private Writer writer;
@@ -508,7 +511,7 @@ public class Replace extends MatchingTask {
         try {
             if (replaceFilterResource != null) {
                 Properties props = getProperties(replaceFilterResource);
-                Iterator e = props.keySet().iterator();
+                Iterator e = getOrderedIterator(props);
                 while (e.hasNext()) {
                     String tok =  e.next().toString();
                     Replacefilter replaceFilter = createReplacefilter();
@@ -664,26 +667,19 @@ public class Replace extends MatchingTask {
             File temp = FILE_UTILS.createTempFile("rep", ".tmp",
                     src.getParentFile(), false, true);
             try {
-                FileInput in = new FileInput(src);
-                try {
-                    FileOutput out = new FileOutput(temp);
-                    try {
-                        out.setInputBuffer(buildFilterChain(in.getOutputBuffer()));
+                try (FileInput in = new FileInput(src);
+                     FileOutput out = new FileOutput(temp)) {
+                    out.setInputBuffer(buildFilterChain(in.getOutputBuffer()));
 
-                        while (in.readChunk()) {
-                            if (processFilterChain()) {
-                                out.process();
-                            }
+                    while (in.readChunk()) {
+                        if (processFilterChain()) {
+                            out.process();
                         }
-
-                        flushFilterChain();
-
-                        out.flush();
-                    } finally {
-                        out.close();
                     }
-                } finally {
-                    in.close();
+
+                    flushFilterChain();
+
+                    out.flush();
                 }
                 boolean changes = (replaceCount != repCountStart);
                 if (changes) {
@@ -952,4 +948,22 @@ public class Replace extends MatchingTask {
         }
     }
 
+    /**
+     * Sort keys by size so that tokens that are substrings of other
+     * strings are tried later.
+     */
+    private Iterator<Object> getOrderedIterator(Properties props) {
+        List<Object> keys = new ArrayList<Object>(props.keySet());
+        Collections.sort(keys, new Comparator<Object>() {
+                //Override annotation is not supported as long as we want to support building Ant on Java 1.5
+                public int compare(Object key1, Object key2) {
+                    return compare(key1.toString(), key2.toString());
+                }
+
+                private int compare(String key1, String key2) {
+                    return key2.length() - key1.length();
+                }
+            });
+        return keys.iterator();
+    }
 }

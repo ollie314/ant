@@ -34,10 +34,10 @@
   <property name="name" value="ant"/>
   <!-- this is the groupId of ant in the Maven repository -->
   <property name="groupid" value="org/apache/ant"/>
-  <property name="project.version" value="1.9.7alpha"/>
+  <property name="project.version" value="1.10.0alpha"/>
   <!-- pom.version is used when doing a distribution and must match with what is checked in under src/etc/poms -->
-  <property name="pom.version" value="1.9.7-SNAPSHOT"/>
-  <property name="manifest-version" value="1.9.7"/>
+  <property name="pom.version" value="1.10.0-SNAPSHOT"/>
+  <property name="manifest-version" value="1.10.0"/>
   <property name="bootstrap.jar" value="ant-bootstrap.jar"/>
 
   <property name="ant.package" value="org/apache/tools/ant"/>
@@ -100,12 +100,11 @@
        ===================================================================
   -->
   <property name="debug" value="true"/>
-  <property name="chmod.fail" value="true"/>
-  <property name="chmod.maxparallel" value="250"/>
+  <property name="setpermissions.fail" value="true"/>
   <property name="deprecation" value="false"/>
   <property name="optimize" value="true"/>
-  <property name="javac.target" value="1.5"/>
-  <property name="javac.source" value="1.5"/>
+  <property name="javac.target" value="1.8"/>
+  <property name="javac.source" value="1.8"/>
   <property name="junit.filtertrace" value="off"/>
   <property name="junit.summary" value="no"/>
   <property name="test.haltonfailure" value="false"/>
@@ -121,7 +120,6 @@
             value="**/version.txt,**/defaultManifest.mf"/>
   <property name="junit.collector.dir" value="${build.dir}/failingTests"/>
   <property name="junit.collector.class" value="FailedTests"/>
-
 
   <!--
        ===================================================================
@@ -375,12 +373,7 @@
       </not>
     </condition>
     <property name="ignoresystemclasses" value="false"/>
-    <available property="jdk1.6+" classname="java.net.CookieStore"/>
-    <available property="jdk1.7+" classname="java.nio.file.FileSystem"/>
-    <available property="jdk1.8+" classname="java.lang.reflect.Executable"/>
-    <condition property="jdk1.9+">
-      <contains string="${java.version}" substring="1.9."/>
-    </condition>
+    <available property="jdk9+" classname="java.lang.module.ModuleDescriptor"/>
     <available property="kaffe" classname="kaffe.util.NotImplemented"/>
     <available property="harmony"
                classname="org.apache.harmony.luni.util.Base64"/>
@@ -500,16 +493,6 @@
       </or>
     </condition>
 
-    <!-- http client needs commons logging -->
-    <condition property="apache-httpclient.present">
-      <and>
-        <available
-          classname="org.apache.commons.httpclient.HttpClient"
-          classpathref="classpath" ignoresystemclasses="${ignoresystemclasses}"/>
-        <isset property="commons.logging.present"/>
-      </and>
-    </condition>
-
     <available property="rhino.present"
       classname="org.mozilla.javascript.Scriptable"
       classpathref="classpath" ignoresystemclasses="${ignoresystemclasses}"/>
@@ -543,10 +526,7 @@
       property="javadoc.doclint.none" 
       value="-Xdoclint:none" 
       else="">
-      <and>
-        <isset property="jdk1.8+"/>
-        <not><isset property="withDoclint"/></not>
-      </and>
+      <not><isset property="withDoclint"/></not>
     </condition>
   </target>
 
@@ -930,18 +910,20 @@
       <include name="*.pl"/>
     </fixcrlf>
 
-    <chmod perm="ugo+rx" dir="${dist.dir}" type="dir" includes="**"
-      failonerror="${chmod.fail}"/>
-    <chmod perm="ugo+r" dir="${dist.dir}" type="file" includes="**"
-      failonerror="${chmod.fail}" maxparallel="${chmod.maxparallel}"/>
-    <chmod perm="ugo+x" type="file" failonerror="${chmod.fail}">
+    <setpermissions mode="755" failonerror="${setpermissions.fail}">
+      <dirset dir="${dist.dir}"/>
+    </setpermissions>
+    <setpermissions mode="644" failonerror="${setpermissions.fail}">
+      <fileset dir="${dist.dir}"/>
+    </setpermissions>
+    <setpermissions mode="755" failonerror="${setpermissions.fail}">
       <fileset dir="${dist.bin}">
         <include name="**/ant"/>
         <include name="**/antRun"/>
         <include name="**/*.pl"/>
         <include name="**/*.py"/>
       </fileset>
-    </chmod>
+    </setpermissions>
 
   </target>
 
@@ -1042,18 +1024,20 @@
       </fileset>
     </copy>
 
-    <chmod perm="ugo+rx" dir="${dist.dir}" type="dir" includes="**"
-      failonerror="${chmod.fail}"/>
-    <chmod perm="ugo+r" dir="${dist.dir}" type="file" includes="**"
-      failonerror="${chmod.fail}" maxparallel="${chmod.maxparallel}"/>
-    <chmod perm="ugo+x" type="file" failonerror="${chmod.fail}">
+    <setpermissions mode="755" failonerror="${setpermissions.fail}">
+      <dirset dir="${dist.dir}"/>
+    </setpermissions>
+    <setpermissions mode="644" failonerror="${setpermissions.fail}">
+      <fileset dir="${dist.dir}"/>
+    </setpermissions>
+    <setpermissions mode="755" failonerror="${setpermissions.fail}">
       <fileset dir="${dist.bin}">
         <include name="**/ant"/>
         <include name="**/antRun"/>
         <include name="**/*.pl"/>
         <include name="**/*.py"/>
       </fileset>
-    </chmod>
+    </setpermissions>
 
     <!-- publish some useful stylesheets -->
     <copy todir="${dist.etc}">
@@ -1160,18 +1144,21 @@
       <exclude name="${tests.etc.dir}/taskdefs/fixcrlf/input/Junk?.java"/>
     </fixcrlf>
 
-    <chmod perm="ugo+x" dir="${src.dist.dir}" type="dir"
-      failonerror="${chmod.fail}"/>
-    <chmod perm="ugo+r" dir="${src.dist.dir}" failonerror="${chmod.fail}"/>
-    <chmod perm="ugo+x" failonerror="${chmod.fail}">
+    <setpermissions mode="755" failonerror="${setpermissions.fail}">
+      <dirset dir="${src.dist.dir}"/>
+    </setpermissions>
+    <setpermissions mode="644" failonerror="${setpermissions.fail}">
+      <fileset dir="${src.dist.dir}"/>
+    </setpermissions>
+    <setpermissions mode="755" failonerror="${setpermissions.fail}">
       <fileset dir="${src.dist.dir}">
-        <include name="**/.sh"/>
-        <include name="**/.pl"/>
-        <include name="**/.py"/>
+        <include name="**/*.sh"/>
+        <include name="**/*.pl"/>
+        <include name="**/*.py"/>
         <include name="**/ant"/>
         <include name="**/antRun"/>
       </fileset>
-    </chmod>
+    </setpermissions>
 
   </target>
 

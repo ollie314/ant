@@ -78,7 +78,11 @@ import org.apache.tools.zip.ZipOutputStream.UnicodeExtraFieldPolicy;
  */
 public class Zip extends MatchingTask {
     private static final int BUFFER_SIZE = 8 * 1024;
-    private static final int ROUNDUP_MILLIS = 1999; // 2 seconds - 1
+    /**
+     * The granularity of timestamps inside a ZIP archive.
+     */
+    private static final int ZIP_FILE_TIMESTAMP_GRANULARITY = 2000;
+    private static final int ROUNDUP_MILLIS = ZIP_FILE_TIMESTAMP_GRANULARITY - 1;
     // CheckStyle:VisibilityModifier OFF - bc
 
     protected File zipFile;
@@ -1022,8 +1026,7 @@ public class Zip extends MatchingTask {
      * Determine a Resource's Unix mode or return the given default
      * value if not available.
      */
-    private int getUnixMode(final Resource r, final ZipFile zf, final int defaultMode)
-        throws IOException {
+    private int getUnixMode(final Resource r, final ZipFile zf, final int defaultMode) {
 
         int unixMode = defaultMode;
         if (zf != null) {
@@ -1548,7 +1551,8 @@ public class Zip extends MatchingTask {
         final Resource[] rs = selectFileResources(initial);
         Resource[] result =
             ResourceUtils.selectOutOfDateSources(this, rs, mapper,
-                                                 getZipScanner());
+                                                 getZipScanner(),
+                                                 ZIP_FILE_TIMESTAMP_GRANULARITY);
         if (!doFilesonly) {
             final Union u = new Union();
             u.addAll(Arrays.asList(selectDirectoryResources(initial)));
@@ -1911,14 +1915,11 @@ public class Zip extends MatchingTask {
                                      getLocation());
         }
 
-        final FileInputStream fIn = new FileInputStream(file);
-        try {
+        try (FileInputStream fIn = new FileInputStream(file)) {
             // ZIPs store time with a granularity of 2 seconds, round up
             zipFile(fIn, zOut, vPath,
                     file.lastModified() + (roundUp ? ROUNDUP_MILLIS : 0),
                     null, mode);
-        } finally {
-            fIn.close();
         }
     }
 

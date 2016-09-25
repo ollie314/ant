@@ -44,6 +44,7 @@ public class ScpToMessage extends AbstractSshMessage {
     private String remotePath;
     private List directoryList;
     private Integer fileMode, dirMode;
+    private boolean preserveLastModified;
 
     /**
      * Constructor for ScpToMessage
@@ -60,7 +61,94 @@ public class ScpToMessage extends AbstractSshMessage {
      * @since Ant 1.7
      */
     public ScpToMessage(final boolean verbose, final Session session) {
-        super(verbose, session);
+        this(verbose, false, session);
+    }
+
+    /**
+     * Constructor for ScpToMessage
+     * @param verbose if true do verbose logging
+     * @param compressed if true use compression
+     * @param session the ssh session to use
+     * @since Ant 1.9.8
+     */
+    public ScpToMessage(final boolean verbose, boolean compressed, final Session session) {
+        super(verbose, compressed, session);
+    }
+
+    /**
+     * Constructor for a local file to remote.
+     * @param verbose if true do verbose logging
+     * @param session the scp session to use
+     * @param aLocalFile the local file
+     * @param aRemotePath the remote path
+     * @param preserveLastModified whether to preserve the last modified timestamps
+     * @since Ant 1.9.7
+     */
+    public ScpToMessage(final boolean verbose,
+                        final Session session,
+                        final File aLocalFile,
+                        final String aRemotePath,
+                        final boolean preserveLastModified) {
+        this(verbose, false, session, aLocalFile, aRemotePath, preserveLastModified);
+    }
+
+    /**
+     * Constructor for a local file to remote.
+     * @param verbose if true do verbose logging
+     * @param compressed if true use compression
+     * @param session the scp session to use
+     * @param aLocalFile the local file
+     * @param aRemotePath the remote path
+     * @param preserveLastModified whether to preserve the last modified timestamps
+     * @since Ant 1.9.8
+     */
+    public ScpToMessage(final boolean verbose,
+                        final boolean compressed,
+                        final Session session,
+                        final File aLocalFile,
+                        final String aRemotePath,
+                        final boolean preserveLastModified) {
+        this(verbose, compressed, session, aRemotePath);
+        this.localFile = aLocalFile;
+        this.preserveLastModified = preserveLastModified;
+    }
+
+    /**
+     * Constructor for a local directories to remote.
+     * @param verbose if true do verbose logging
+     * @param session the scp session to use
+     * @param aDirectoryList a list of directories
+     * @param aRemotePath the remote path
+     * @param preserveLastModified whether to preserve the last modified timestamps
+     * @since Ant 1.9.7
+     */
+    public ScpToMessage(final boolean verbose,
+                        final Session session,
+                        final List aDirectoryList,
+                        final String aRemotePath,
+                        final boolean preserveLastModified) {
+        this(verbose, false, session, aDirectoryList, aRemotePath, preserveLastModified);
+    }
+
+    /**
+     * Constructor for a local directories to remote.
+     * @param verbose if true do verbose logging
+     * @param compressed whether to use compression
+     * @param session the scp session to use
+     * @param aDirectoryList a list of directories
+     * @param aRemotePath the remote path
+     * @param preserveLastModified whether to preserve the last modified timestamps
+     * @since Ant 1.9.8
+     */
+    public ScpToMessage(final boolean verbose,
+                        final boolean compressed,
+                        final Session session,
+                        final List aDirectoryList,
+                        final String aRemotePath,
+                        final boolean preserveLastModified) {
+        this(verbose, compressed, session, aRemotePath);
+        this.directoryList = aDirectoryList;
+        this.preserveLastModified = preserveLastModified;
     }
 
     /**
@@ -75,9 +163,7 @@ public class ScpToMessage extends AbstractSshMessage {
                         final Session session,
                         final File aLocalFile,
                         final String aRemotePath) {
-        this(verbose, session, aRemotePath);
-
-        this.localFile = aLocalFile;
+        this(verbose, session, aLocalFile, aRemotePath, false);
     }
 
     /**
@@ -92,9 +178,7 @@ public class ScpToMessage extends AbstractSshMessage {
                         final Session session,
                         final List aDirectoryList,
                         final String aRemotePath) {
-        this(verbose, session, aRemotePath);
-
-        this.directoryList = aDirectoryList;
+        this(verbose, session, aDirectoryList, aRemotePath, false);
     }
 
     /**
@@ -107,7 +191,22 @@ public class ScpToMessage extends AbstractSshMessage {
     private ScpToMessage(final boolean verbose,
                          final Session session,
                          final String aRemotePath) {
-        super(verbose, session);
+        this(verbose, false, session, aRemotePath);
+    }
+
+    /**
+     * Constructor for ScpToMessage.
+     * @param verbose if true do verbose logging
+     * @param compressed if true use compression
+     * @param session the scp session to use
+     * @param aRemotePath the remote path
+     * @since Ant 1.9.8
+     */
+    private ScpToMessage(final boolean verbose,
+                         final boolean compressed,
+                         final Session session,
+                         final String aRemotePath) {
+        super(verbose, compressed, session);
         this.remotePath = aRemotePath;
     }
 
@@ -152,7 +251,15 @@ public class ScpToMessage extends AbstractSshMessage {
     }
 
     private void doSingleTransfer() throws IOException, JSchException {
-        final String cmd = "scp -t " + remotePath;
+        StringBuilder sb = new StringBuilder("scp -t ");
+        if (getPreserveLastModified()) {
+            sb.append("-p ");
+        }
+        if (getCompressed()) {
+            sb.append("-C ");
+        }
+        sb.append(remotePath);
+        final String cmd = sb.toString();
         final Channel channel = openExecChannel(cmd);
         try {
 
@@ -171,7 +278,15 @@ public class ScpToMessage extends AbstractSshMessage {
     }
 
     private void doMultipleTransfer() throws IOException, JSchException {
-        final Channel channel = openExecChannel("scp -r -d -t " + remotePath);
+        StringBuilder sb = new StringBuilder("scp -r -d -t ");
+        if (getPreserveLastModified()) {
+            sb.append("-p ");
+        }
+        if (getCompressed()) {
+            sb.append("-C ");
+        }
+        sb.append(remotePath);
+        final Channel channel = openExecChannel(sb.toString());
         try {
             final OutputStream out = channel.getOutputStream();
             final InputStream in = channel.getInputStream();
@@ -226,6 +341,16 @@ public class ScpToMessage extends AbstractSshMessage {
                                    final OutputStream out) throws IOException {
         // send "C0644 filesize filename", where filename should not include '/'
         final long filesize = localFile.length();
+
+        if (getPreserveLastModified()) {
+            String command = "T" + (localFile.lastModified() / 1000) + " 0";
+            command += " " + (localFile.lastModified() / 1000) + " 0\n";
+            out.write(command.getBytes());
+            out.flush();
+
+            waitForAck(in);
+        }
+
         String command = "C0";
         command += Integer.toOctalString(getFileMode());
         command += " " + filesize + " ";
@@ -326,6 +451,14 @@ public class ScpToMessage extends AbstractSshMessage {
      */
     public int getDirMode() {
         return dirMode != null ? dirMode.intValue() : DEFAULT_DIR_MODE;
+    }
+
+    /**
+     * Whether to preserve the last modified time.
+     * @since Ant 1.9.7
+     */
+    public boolean getPreserveLastModified() {
+        return preserveLastModified;
     }
 
 }

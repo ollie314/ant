@@ -533,13 +533,8 @@ public class Property extends Task {
         Properties props = new Properties();
         log("Loading " + url, Project.MSG_VERBOSE);
         try {
-            InputStream is = url.openStream();
-            try {
+            try (InputStream is = url.openStream()) {
                 loadProperties(props, is, url.getFile().endsWith(".xml"));
-            } finally {
-                if (is != null) {
-                    is.close();
-                }
             }
             addProperties(props);
         } catch (IOException ex) {
@@ -630,13 +625,7 @@ public class Property extends Task {
         } catch (IOException ex) {
             throw new BuildException(ex, getLocation());
         } finally {
-            if (is != null) {
-                try {
-                    is.close();
-                } catch (IOException e) {
-                    // ignore
-                }
-            }
+            FileUtils.close(is);
             if (cleanup && cL != null) {
                 ((AntClassLoader) cL).cleanup();
             }

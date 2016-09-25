@@ -18,6 +18,7 @@
 package org.apache.tools.ant;
 
 import java.io.ByteArrayOutputStream;
+import java.io.Closeable;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -48,7 +49,6 @@ import org.apache.tools.ant.util.CollectionUtils;
 import org.apache.tools.ant.util.FileUtils;
 import org.apache.tools.ant.util.JavaEnvUtils;
 import org.apache.tools.ant.util.LoaderUtils;
-import org.apache.tools.ant.util.ReflectUtil;
 import org.apache.tools.ant.util.VectorSet;
 import org.apache.tools.zip.ZipLong;
 
@@ -69,9 +69,13 @@ import org.apache.tools.zip.ZipLong;
  * </p>
  *
  */
-public class AntClassLoader extends ClassLoader implements SubBuildListener {
+public class AntClassLoader extends ClassLoader implements SubBuildListener, Closeable {
 
     private static final FileUtils FILE_UTILS = FileUtils.getFileUtils();
+
+    static {
+        registerAsParallelCapable();
+    }
 
     /**
      * An enumeration of all resources of a given name found within the
@@ -490,19 +494,13 @@ public class AntClassLoader extends ClassLoader implements SubBuildListener {
                 + pathComponent.lastModified() + "-" + pathComponent.length();
         String classpath = pathMap.get(absPathPlusTimeAndLength);
         if (classpath == null) {
-            JarFile jarFile = null;
-            try {
-                jarFile = new JarFile(pathComponent);
+            try (JarFile jarFile = new JarFile(pathComponent)) {
                 final Manifest manifest = jarFile.getManifest();
                 if (manifest == null) {
                     return;
                 }
                 classpath = manifest.getMainAttributes()
                     .getValue(Attributes.Name.CLASS_PATH);
-            } finally {
-                if (jarFile != null) {
-                    jarFile.close();
-                }
             }
             if (classpath == null) {
                 classpath = "";
@@ -1210,11 +1208,8 @@ public class AntClassLoader extends ClassLoader implements SubBuildListener {
      *
      * @return the entry's certificates or null is the container is
      *         not a jar or it has no certificates.
-     *
-     * @exception IOException if the manifest cannot be read.
      */
-    private Certificate[] getCertificates(final File container, final String entry)
-        throws IOException {
+    private Certificate[] getCertificates(final File container, final String entry) {
         if (container.isDirectory()) {
             return null;
         }
@@ -1413,12 +1408,7 @@ public class AntClassLoader extends ClassLoader implements SubBuildListener {
      */
     public synchronized void cleanup() {
         for (final Enumeration<JarFile> e = jarFiles.elements(); e.hasMoreElements();) {
-            final JarFile jarFile = e.nextElement();
-            try {
-                jarFile.close();
-            } catch (final IOException ioe) {
-                // ignore
-            }
+            FileUtils.close(e.nextElement());
         }
         jarFiles = new Hashtable<File, JarFile>();
         if (project != null) {
@@ -1550,20 +1540,15 @@ public class AntClassLoader extends ClassLoader implements SubBuildListener {
         return "AntClassLoader[" + getClasspath() + "]";
     }
 
-    private static Class<?> subClassToLoad = null;
-    private static final Class<?>[] CONSTRUCTOR_ARGS = new Class[] {
-        ClassLoader.class, Project.class, Path.class, Boolean.TYPE
-    };
+    /** {@inheritDoc} */
+    @Override
+    public Enumeration<URL> getResources(String name) throws IOException {
+        return getNamedResources(name);
+    }
 
-    static {
-        if (JavaEnvUtils.isAtLeastJavaVersion(JavaEnvUtils.JAVA_1_5)) {
-            try {
-                subClassToLoad =
-                    Class.forName("org.apache.tools.ant.loader.AntClassLoader5");
-            } catch (final ClassNotFoundException e) {
-                // this is Java5 but the installation is lacking our subclass
-            }
-        }
+    /** {@inheritDoc} */
+    public void close() {
+        cleanup();
     }
 
     /**
@@ -1573,15 +1558,6 @@ public class AntClassLoader extends ClassLoader implements SubBuildListener {
                                                    final Project project,
                                                    final Path path,
                                                    final boolean parentFirst) {
-        if (subClassToLoad != null) {
-            return (AntClassLoader)
-                ReflectUtil.newInstance(subClassToLoad,
-                                        CONSTRUCTOR_ARGS,
-                                        new Object[] {
-                                            parent, project, path,
-                                            Boolean.valueOf(parentFirst)
-                                        });
-        }
         return new AntClassLoader(parent, project, path, parentFirst);
     }
 
@@ -1602,8 +1578,7 @@ public class AntClassLoader extends ClassLoader implements SubBuildListener {
     }
 
     private static boolean readFully(final File f, final byte[] b) throws IOException {
-        final FileInputStream fis = new FileInputStream(f);
-        try {
+        try (FileInputStream fis = new FileInputStream(f)) {
             final int len = b.length;
             int count = 0, x = 0;
             while (count != len) {
@@ -1614,8 +1589,6 @@ public class AntClassLoader extends ClassLoader implements SubBuildListener {
                 count += x;
             }
             return count == len;
-        } finally {
-            fis.close();
         }
     }
 

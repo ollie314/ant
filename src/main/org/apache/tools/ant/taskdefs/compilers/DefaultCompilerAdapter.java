@@ -73,7 +73,10 @@ public abstract class DefaultCompilerAdapter
     protected Path bootclasspath;
     protected Path extdirs;
     protected Path compileClasspath;
+    protected Path modulepath;
+    protected Path upgrademodulepath;
     protected Path compileSourcepath;
+    protected Path moduleSourcepath;
     protected Project project;
     protected Location location;
     protected boolean includeAntRuntime;
@@ -112,13 +115,20 @@ public abstract class DefaultCompilerAdapter
         extdirs = attributes.getExtdirs();
         compileList = attributes.getFileList();
         compileClasspath = attributes.getClasspath();
+        modulepath = attributes.getModulepath();
+        upgrademodulepath = attributes.getUpgrademodulepath();
         compileSourcepath = attributes.getSourcepath();
+        moduleSourcepath = attributes.getModulesourcepath();
         project = attributes.getProject();
         location = attributes.getLocation();
         includeAntRuntime = attributes.getIncludeantruntime();
         includeJavaRuntime = attributes.getIncludejavaruntime();
         memoryInitialSize = attributes.getMemoryInitialSize();
         memoryMaximumSize = attributes.getMemoryMaximumSize();
+        if (moduleSourcepath != null && src == null && compileSourcepath == null) {
+            //Compatibility to prevent NPE from Jikes, Jvc, Kjc
+            compileSourcepath = new Path(getProject());
+        }
     }
 
     /**
@@ -180,6 +190,45 @@ public abstract class DefaultCompilerAdapter
         }
 
         return classpath;
+    }
+
+    /**
+     * Builds the modulepath.
+     * @return the modulepath
+     * @since 1.9.7
+     */
+    protected Path getModulepath() {
+        final Path mp = new Path(getProject());
+        if (modulepath != null) {
+            mp.addExisting(modulepath);
+        }
+        return mp;
+    }
+
+    /**
+     * Builds the upgrademodulepath.
+     * @return the upgrademodulepath
+     * @since 1.9.7
+     */
+    protected Path getUpgrademodulepath() {
+        final Path ump = new Path(getProject());
+        if (upgrademodulepath != null) {
+            ump.addExisting(upgrademodulepath);
+        }
+        return ump;
+    }
+
+    /**
+     * Builds the modulesourcepath for multi module compilation.
+     * @return the modulesourcepath
+     * @since 1.9.7
+     */
+    protected Path getModulesourcepath() {
+        final Path msp = new Path(getProject());
+        if (moduleSourcepath != null) {
+            msp.add(moduleSourcepath);
+        }
+        return msp;
     }
 
     /**
@@ -348,6 +397,31 @@ public abstract class DefaultCompilerAdapter
 
             } else if (t != null && mustSetSourceForTarget(t)) {
                 setImplicitSourceSwitch(cmd, t, adjustSourceValue(t));
+            }
+        }
+        final Path msp = getModulesourcepath();
+        if (msp.size() > 0) {
+            cmd.createArgument().setValue("--module-source-path");
+            cmd.createArgument().setPath(msp);
+        }
+        final Path mp = getModulepath();
+        if (mp.size() > 0) {
+            cmd.createArgument().setValue("--module-path");
+            cmd.createArgument().setPath(mp);
+        }
+        final Path ump = getUpgrademodulepath();
+        if (ump.size() > 0) {
+            cmd.createArgument().setValue("--upgrade-module-path");
+            cmd.createArgument().setPath(ump);
+        }
+        if (attributes.getNativeHeaderDir() != null) {
+            if (assumeJava13() || assumeJava14() || assumeJava15()
+                || assumeJava16() || assumeJava17()) {
+                attributes.log("Support for javac -h has been added in Java8,"
+                               + " ignoring it");
+            } else {
+                cmd.createArgument().setValue("-h");
+                cmd.createArgument().setFile(attributes.getNativeHeaderDir());
             }
         }
         return cmd;
@@ -608,12 +682,23 @@ public abstract class DefaultCompilerAdapter
     }
 
     /**
-     * Shall we assume JDK 1.9 command line switches?
-     * @return true if JDK 1.9
+     * Shall we assume JDK 9 command line switches?
+     * @return true if JDK 9
      * @since Ant 1.9.4
+     * @deprecated use #assumeJava9 instead
      */
     protected boolean assumeJava19() {
-        return assumeJavaXY("javac1.9", JavaEnvUtils.JAVA_1_9);
+        return assumeJavaXY("javac1.9", JavaEnvUtils.JAVA_9)
+            || assumeJavaXY("javac9", JavaEnvUtils.JAVA_9);
+    }
+
+    /**
+     * Shall we assume JDK 9 command line switches?
+     * @return true if JDK 9
+     * @since Ant 1.9.8
+     */
+    protected boolean assumeJava9() {
+        return assumeJava19();
     }
 
     /**
@@ -622,12 +707,10 @@ public abstract class DefaultCompilerAdapter
      */
     private boolean assumeJavaXY(final String javacXY, final String javaEnvVersionXY) {
         return javacXY.equals(attributes.getCompilerVersion())
-            || ("classic".equals(attributes.getCompilerVersion())
-                && JavaEnvUtils.isJavaVersion(javaEnvVersionXY))
-            || ("modern".equals(attributes.getCompilerVersion())
-                && JavaEnvUtils.isJavaVersion(javaEnvVersionXY))
-            || ("extJavac".equals(attributes.getCompilerVersion())
-                && JavaEnvUtils.isJavaVersion(javaEnvVersionXY));
+            || (JavaEnvUtils.isJavaVersion(javaEnvVersionXY) &&
+                ("classic".equals(attributes.getCompilerVersion())
+                 || "modern".equals(attributes.getCompilerVersion())
+                 || "extJavac".equals(attributes.getCompilerVersion())));
     }
 
     /**
@@ -691,8 +774,8 @@ public abstract class DefaultCompilerAdapter
         if (assumeJava18()) {
             return "1.8 in JDK 1.8";
         }
-        if (assumeJava19()) {
-            return "1.9 in JDK 1.9";
+        if (assumeJava9()) {
+            return "9 in JDK 9";
         }
         return "";
     }
@@ -718,7 +801,7 @@ public abstract class DefaultCompilerAdapter
                 && !assumeJava15() && !assumeJava16())
             || (t.equals("7") && !assumeJava17())
             || (t.equals("8") && !assumeJava18())
-            || (t.equals("9") && !assumeJava19());
+            || (t.equals("9") && !assumeJava9());
     }
 
 

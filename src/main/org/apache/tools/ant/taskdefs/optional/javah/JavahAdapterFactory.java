@@ -45,7 +45,7 @@ public class JavahAdapterFactory {
         } else if (JavaEnvUtils.isGij()) {
             return Gcjh.IMPLEMENTATION_NAME;
         }
-        return SunJavah.IMPLEMENTATION_NAME;
+        return ForkingJavah.IMPLEMENTATION_NAME;
     }
 
     /**
@@ -87,6 +87,8 @@ public class JavahAdapterFactory {
         } else if ((JavaEnvUtils.isGij() && choice == null)
             || Gcjh.IMPLEMENTATION_NAME.equals(choice)) {
             return new Gcjh();
+        } else if (ForkingJavah.IMPLEMENTATION_NAME.equals(choice)) {
+            return new ForkingJavah();
         } else if (SunJavah.IMPLEMENTATION_NAME.equals(choice)) {
             return new SunJavah();
         } else if (choice != null) {
@@ -96,9 +98,7 @@ public class JavahAdapterFactory {
                                     .createClassLoader(classpath));
         }
 
-        // This default has been good enough until Ant 1.6.3, so stick
-        // with it
-        return new SunJavah();
+        return new ForkingJavah();
     }
 
     /**

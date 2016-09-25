@@ -135,22 +135,22 @@ public class Get extends Task {
                 }
             }
 
-        //set up logging
-        final int logLevel = Project.MSG_INFO;
-        DownloadProgress progress = null;
-        if (verbose) {
-            progress = new VerboseProgress(System.out);
-        }
-
-        //execute the get
-        try {
-            doGet(source, dest, logLevel, progress);
-        } catch (final IOException ioe) {
-            log("Error getting " + source + " to " + dest);
-            if (!ignoreErrors) {
-                throw new BuildException(ioe, getLocation());
+            //set up logging
+            final int logLevel = Project.MSG_INFO;
+            DownloadProgress progress = null;
+            if (verbose) {
+                progress = new VerboseProgress(System.out);
             }
-        }
+
+            //execute the get
+            try {
+                doGet(source, dest, logLevel, progress);
+            } catch (final IOException ioe) {
+                log("Error getting " + source + " to " + dest);
+                if (!ignoreErrors) {
+                    throw new BuildException(ioe, getLocation());
+                }
+            }
         }
     }
 
@@ -259,7 +259,7 @@ public class Get extends Task {
 
     @Override
     public void log(final String msg, final int msgLevel) {
-        if (!quiet || msgLevel >= Project.MSG_ERR) {
+        if (!quiet || msgLevel <= Project.MSG_ERR) {
             super.log(msg, msgLevel);
         }
     }
@@ -413,13 +413,22 @@ public class Get extends Task {
     }
 
     /**
-     * The number of retries to attempt upon error, defaults to 3.
+     * The number of attempts to make for opening the URI, defaults to 3.
      *
-     * @param r retry count
+     * <p>The name of the method is misleading as a value of 1 means
+     * "don't retry on error" and a value of 0 meant don't even try to
+     * reach the URI at all.</p>
+     *
+     * @param r number of attempts to make
      *
      * @since Ant 1.8.0
      */
     public void setRetries(final int r) {
+        if (r <= 0) {
+            log("Setting retries to " + r
+                + " will make the task not even try to reach the URI at all",
+                Project.MSG_WARN);
+        }
         this.numberRetries = r;
     }
 

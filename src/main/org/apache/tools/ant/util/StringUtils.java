@@ -19,7 +19,11 @@ package org.apache.tools.ant.util;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.Vector;
+import java.util.stream.Collector;
+import java.util.stream.Collectors;
 
 import org.apache.tools.ant.BuildException;
 
@@ -269,5 +273,37 @@ public final class StringUtils {
         } else {
             return string;
         }
+    }
+    
+    /**
+     * Joins the string representation of the elements of a collection to 
+     * a joined string with a given separator.
+     * @param collection Collection of the data to be joined (may be null)
+     * @param separator Separator between elements (may be null)
+     * @return the joined string
+     */
+    public static String join(Collection<?> collection, CharSequence separator) {
+        if (collection == null) {
+            return "";
+        }
+        return collection.stream().map( o -> String.valueOf(o) ).collect(joining(separator));
+    }
+
+    /**
+     * Joins the string representation of the elements of an array to 
+     * a joined string with a given separator.
+     * @param array Array of the data to be joined (may be null)
+     * @param separator Separator between elements (may be null)
+     * @return the joined string
+     */
+    public static String join(Object[] array, CharSequence separator) {
+        if (array == null) {
+            return "";
+        }
+        return join(Arrays.asList(array), separator);
+    }
+
+    private static Collector<CharSequence,?,String> joining(CharSequence separator) {
+        return separator == null ? Collectors.joining() : Collectors.joining(separator);
     }
 }

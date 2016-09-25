@@ -36,18 +36,21 @@ import org.apache.tools.ant.types.selectors.DependSelector;
 import org.apache.tools.ant.types.selectors.DepthSelector;
 import org.apache.tools.ant.types.selectors.DifferentSelector;
 import org.apache.tools.ant.types.selectors.ExtendSelector;
+import org.apache.tools.ant.types.selectors.ExecutableSelector;
 import org.apache.tools.ant.types.selectors.FileSelector;
 import org.apache.tools.ant.types.selectors.FilenameSelector;
 import org.apache.tools.ant.types.selectors.MajoritySelector;
 import org.apache.tools.ant.types.selectors.NoneSelector;
 import org.apache.tools.ant.types.selectors.NotSelector;
 import org.apache.tools.ant.types.selectors.OrSelector;
+import org.apache.tools.ant.types.selectors.OwnedBySelector;
 import org.apache.tools.ant.types.selectors.PresentSelector;
 import org.apache.tools.ant.types.selectors.ReadableSelector;
 import org.apache.tools.ant.types.selectors.SelectSelector;
 import org.apache.tools.ant.types.selectors.SelectorContainer;
 import org.apache.tools.ant.types.selectors.SelectorScanner;
 import org.apache.tools.ant.types.selectors.SizeSelector;
+import org.apache.tools.ant.types.selectors.SymlinkSelector;
 import org.apache.tools.ant.types.selectors.TypeSelector;
 import org.apache.tools.ant.types.selectors.WritableSelector;
 import org.apache.tools.ant.types.selectors.modifiedselector.ModifiedSelector;
@@ -67,6 +70,7 @@ public abstract class AbstractFileSet extends DataType
     private List<FileSelector> selectors = new ArrayList<FileSelector>();
 
     private File dir;
+    private boolean fileAttributeUsed;
     private boolean useDefaultExcludes = true;
     private boolean caseSensitive = true;
     private boolean followSymlinks = true;
@@ -130,6 +134,9 @@ public abstract class AbstractFileSet extends DataType
     public synchronized void setDir(File dir) throws BuildException {
         if (isReference()) {
             throw tooManyAttributes();
+        }
+        if (fileAttributeUsed && !getDir().equals(dir)) {
+            throw dirAndFileAreMutuallyExclusive();
         }
         this.dir = dir;
         directoryScanner = null;
@@ -228,7 +235,11 @@ public abstract class AbstractFileSet extends DataType
         if (isReference()) {
             throw tooManyAttributes();
         }
+        if (getDir() != null) {
+            throw dirAndFileAreMutuallyExclusive();
+        }
         setDir(file.getParentFile());
+        fileAttributeUsed = true;
         createInclude().setName(file.getName());
     }
 
@@ -798,6 +809,27 @@ public abstract class AbstractFileSet extends DataType
     }
 
     /**
+     * @since 1.10.0
+     */
+    public void addExecutable(ExecutableSelector e) {
+        appendSelector(e);
+    }
+
+    /**
+     * @since 1.10.0
+     */
+    public void addSymlink(SymlinkSelector e) {
+        appendSelector(e);
+    }
+
+    /**
+     * @since 1.10.0
+     */
+    public void addOwnedBy(OwnedBySelector o) {
+        appendSelector(o);
+    }
+
+    /**
      * Add an arbitrary selector.
      * @param selector the <code>FileSelector</code> to add.
      * @since Ant 1.6
@@ -918,5 +950,9 @@ public abstract class AbstractFileSet extends DataType
             }
             setChecked(true);
         }
+    }
+
+    private BuildException dirAndFileAreMutuallyExclusive() {
+        return new BuildException("you can only specify one of the dir and file attributes");
     }
 }

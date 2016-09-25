@@ -28,8 +28,12 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.reflect.Field;
 import java.net.URL;
+import java.util.ArrayList;
 import java.util.Enumeration;
+import java.util.HashMap;
 import java.util.Hashtable;
+import java.util.List;
+import java.util.Map;
 import java.util.Vector;
 
 import javax.xml.parsers.ParserConfigurationException;
@@ -60,6 +64,7 @@ import org.apache.tools.ant.types.resources.FileResource;
 import org.apache.tools.ant.types.resources.URLProvider;
 import org.apache.tools.ant.util.FileUtils;
 import org.apache.tools.ant.util.JAXPUtils;
+import org.apache.tools.ant.util.JavaEnvUtils;
 import org.xml.sax.EntityResolver;
 import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
@@ -123,7 +128,10 @@ public class TraXLiaison implements XSLTLiaison4, ErrorListener, XSLTLoggerAware
     private final Hashtable<String, Object> params = new Hashtable<String, Object>();
 
     /** factory attributes */
-    private final Vector attributes = new Vector();
+    private final List<Object[]> attributes = new ArrayList<Object[]>();
+
+    /** factory features */
+    private final Map<String, Boolean> features = new HashMap<String, Boolean>();
 
     /** whether to suppress warnings */
     private boolean suppressWarnings = false;
@@ -293,17 +301,11 @@ public class TraXLiaison implements XSLTLiaison4, ErrorListener, XSLTLoggerAware
         // and avoid keeping the handle until the object is garbaged.
         // (always keep control), otherwise you won't be able to delete
         // the file quickly on windows.
-        InputStream xslStream = null;
-        try {
-            xslStream
-                = new BufferedInputStream(stylesheet.getInputStream());
+        try (InputStream xslStream =
+             new BufferedInputStream(stylesheet.getInputStream())) {
             templatesModTime = stylesheet.getLastModified();
             final Source src = getSource(xslStream, stylesheet);
             templates = getFactory().newTemplates(src);
-        } finally {
-            if (xslStream != null) {
-                xslStream.close();
-            }
         }
     }
 
@@ -421,23 +423,23 @@ public class TraXLiaison implements XSLTLiaison4, ErrorListener, XSLTLoggerAware
             }
         }
 
-        try { // #51668, #52382
-            final Field _isNotSecureProcessing = tfactory.getClass().getDeclaredField("_isNotSecureProcessing");
-            _isNotSecureProcessing.setAccessible(true);
-            _isNotSecureProcessing.set(tfactory, Boolean.TRUE);
-        } catch (final Exception x) {
-            if (project != null) {
-                project.log(x.toString(), Project.MSG_DEBUG);
-            }
-        }
+        applyReflectionHackForExtensionMethods();
 
         tfactory.setErrorListener(this);
 
         // specific attributes for the transformer
         final int size = attributes.size();
         for (int i = 0; i < size; i++) {
-            final Object[] pair = (Object[]) attributes.elementAt(i);
+            final Object[] pair = attributes.get(i);
             tfactory.setAttribute((String) pair[0], pair[1]);
+        }
+
+        for (Map.Entry<String, Boolean> feature : features.entrySet()) {
+            try {
+                tfactory.setFeature(feature.getKey(), feature.getValue());
+            } catch (TransformerConfigurationException ex) {
+                throw new BuildException(ex);
+            }
         }
 
         if (uriResolver != null) {
@@ -445,7 +447,6 @@ public class TraXLiaison implements XSLTLiaison4, ErrorListener, XSLTLoggerAware
         }
         return tfactory;
     }
-
 
     /**
      * Set the factory name to use instead of JAXP default lookup.
@@ -466,7 +467,17 @@ public class TraXLiaison implements XSLTLiaison4, ErrorListener, XSLTLoggerAware
      */
     public void setAttribute(final String name, final Object value) {
         final Object[] pair = new Object[]{name, value};
-        attributes.addElement(pair);
+        attributes.add(pair);
+    }
+
+    /**
+     * Set a custom feature for the JAXP factory implementation.
+     * @param name the feature name.
+     * @param value the value of the feature
+     * @since Ant 1.9.8
+     */
+    public void setFeature(final String name, final boolean value) {
+        features.put(name, value);
     }
 
     /**
@@ -625,6 +636,10 @@ public class TraXLiaison implements XSLTLiaison4, ErrorListener, XSLTLoggerAware
                         (XSLTProcess.Factory.Attribute) attrs.nextElement();
                 setAttribute(attr.getName(), attr.getValue());
             }
+            for (final XSLTProcess.Factory.Feature feature
+                     : factory.getFeatures()) {
+                setFeature(feature.getName(), feature.getValue());
+            }
         }
 
         final XMLCatalog xmlCatalog = xsltTask.getXMLCatalog();
@@ -647,4 +662,20 @@ public class TraXLiaison implements XSLTLiaison4, ErrorListener, XSLTLoggerAware
 
         traceConfiguration = xsltTask.getTraceConfiguration();
     }
+
+    private void applyReflectionHackForExtensionMethods() {
+        // Jigsaw doesn't allow reflection to work, so we can stop trying
+        if (!JavaEnvUtils.isAtLeastJavaVersion(JavaEnvUtils.JAVA_9)) {
+            try { // #51668, #52382
+                final Field _isNotSecureProcessing = tfactory.getClass().getDeclaredField("_isNotSecureProcessing");
+                _isNotSecureProcessing.setAccessible(true);
+                _isNotSecureProcessing.set(tfactory, Boolean.TRUE);
+            } catch (final Exception x) {
+                if (project != null) {
+                    project.log(x.toString(), Project.MSG_DEBUG);
+                }
+            }
+        }
+    }
+
 }
